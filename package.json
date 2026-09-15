@@ -1,0 +1,13 @@
+{
+  "name": "change-logic-assignment",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n api,client -c blue,green \"npm run start:dev --prefix api\" \"npm run dev --prefix client\"",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "install:all": "npm install --prefix api && npm install --prefix client"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
