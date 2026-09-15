@@ -20,3 +20,4 @@ A simple app demonstrating a custom implementation of a multi-tenant survey app
   Other useful scripts:
     - `npm run db:up` / `npm run db:down` - start/stop the postgres container
     - `npx prisma migrate dev` - apply pending migrations to your local dev database
+    - `npm run db:seed --prefix api` - populate dummy orgs/users/surveys/responses for local dev
