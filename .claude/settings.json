@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(DROP *)",
+      "Bash(TRUNCATE *)",
+      "Bash(*DELETE FROM*)",
+      "Bash(*psql*-c*DROP*)",
+      "Bash(*mysql*-e*DROP*)",
+      "Bash(*prisma migrate reset*)",
+      "Bash(*prisma db push --force-reset*)",
+      "Bash(rm -rf *)"
+    ],
+    "ask": [
+      "Bash(*migrate*)",
+      "Bash(*DELETE*)",
+      "Bash(*UPDATE*)"
+    ]
+  },
+  "hooks": {
+      "PreToolUse": [
+        {
+          "matcher": "Bash",
+          "hooks": [
+            {
+              "type": "command",
+              "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/block-destructive-db.sh"
+            }
+          ]
+        }
+      ]
+    }
+}

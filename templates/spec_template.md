@@ -43,3 +43,10 @@ Things intentionally deferred — name them so it's clear they were considered,
 not missed.
 
 - ...
+
+## Implementation notes
+
+Update as implementation proceeds. Capture what was actually built, any
+deviations from the plan above and why, and links to relevant ADRs.
+
+- ...
