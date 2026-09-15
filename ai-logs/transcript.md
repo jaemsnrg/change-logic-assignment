@@ -53,3 +53,18 @@ Log of conversations with AI coding agents (e.g. Claude Code) used to produce wo
 - Added a "Spec-driven workflow" section to `CLAUDE.md`: specs live in `specs/` (from `templates/spec_template.md`), must be kept current with implementation notes as work proceeds (not just captured in commit messages/PRs), and `docs/adr/` must be cross-checked for governing decisions before implementing, with conflicts resolved via spec update or new ADR.
 - Fixed the ADR path reference in `CLAUDE.md` after the user relocated the file to `docs/adr/adr-0001-multi-tenancy-rls.md`.
 - Added an "Implementation notes" section to `templates/spec_template.md` so the spec-driven workflow has a concrete place to record what was built and any deviations, per the new CLAUDE.md rule.
+
+## Session — 2026-09-15 (Claude Code, Sonnet 5)
+
+**Prompt:** "/mattpocock-skills:grill-me grill me on the rough data model for our project, we are looking to flesh out a finalised schema: Organization(id, name, logoUrl?) / User(id, orgId, role, name) / Survey(id, orgId, title, questions: Question[]) / Question(id, surveyId, type, text, order) / Response(id, surveyId, userId, orgId, weekKey, answers: Answer[]) / Answer(id, questionId, value)"
+
+- Ran a `grilling` session against the rough sketch, cross-checked against the existing `specs/pulse-surveys.md` and `docs/adr/adr-0001-multi-tenancy-rls.md`. Three rounds of frontier questions covered: `Answer.value` (generic `Json` vs. typed `ratingValue`/`yesNoValue` columns — user chose generic), the missing `Answer.responseId` FK (confirmed as an omission, added), `Survey.isActive` (kept as boolean), `Organization.logoUrl` (dropped — handled elsewhere, out of scope), `weekKey` (resolved to `weekStart: date`, Monday UTC, matching the existing spec), and `Question.order`'s cap of 3 (kept, app-enforced).
+- A follow-up round resolved the implication of choosing generic `Answer.value`: stored as Postgres `Json`, validated against `Question.type` in app code (not DB-constrained), and the weekly rollup (rating avg, yes/no counts) computed in app code rather than SQL aggregates, since generic JSON isn't directly aggregatable.
+
+
+**Prompt:** "document our schema, and write a db migraition file for my review"
+
+- Updated `specs/pulse-surveys.md`'s data model section to the finalized schema (generic `Answer.value: Json`, `unique(responseId, questionId)`, dropped `logoUrl`), added an "Answer value storage" row to the Key decisions table, an Implementation note on app-code rollup computation, and a documented known gap (RLS policies don't protect against the table-owner/superuser DB role — docker-compose's single `pulse` role currently plays both parts).
+- Created `api/prisma/schema.prisma` (Prisma is not yet installed in `api/package.json` — flagged as a prerequisite before this can run).
+- Hand-authored `api/prisma/migrations/20260915120000_init/migration.sql` (+ `migration_lock.toml`): table/enum/FK/index DDL, plus RLS `ENABLE ROW LEVEL SECURITY` / `FORCE ROW LEVEL SECURITY` / `CREATE POLICY` per tenant-scoped table — direct `orgId` check for `users`/`surveys`/`responses`, transitive `EXISTS` subquery via the parent for `questions`/`answers` (no `orgId` column on those two). Used `current_setting('app.tenant_id', true)` so missing tenant context denies by default rather than leaking rows, per ADR-0001.
+- Did not run the migration against the database or install Prisma — left both for explicit user review/approval first.

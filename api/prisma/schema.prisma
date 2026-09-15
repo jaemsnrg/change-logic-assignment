@@ -1,0 +1,105 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  Manager
+  Member
+}
+
+enum QuestionType {
+  rating
+  yesNo
+}
+
+/// Tenant root. Not itself RLS-scoped — see docs/adr/adr-0001-multi-tenancy-rls.md
+model Organization {
+  id   String @id @default(cuid())
+  name String
+
+  users   User[]
+  surveys Survey[]
+
+  @@map("organizations")
+}
+
+model User {
+  id    String @id @default(cuid())
+  orgId String
+  name  String
+  role  Role
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  responses    Response[]
+
+  @@index([orgId])
+  @@map("users")
+}
+
+model Survey {
+  id        String   @id @default(cuid())
+  orgId     String
+  title     String
+  isActive  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  questions    Question[]
+  responses    Response[]
+
+  @@index([orgId])
+  @@index([orgId, isActive])
+  @@map("surveys")
+}
+
+/// orgId scoped transitively via Survey in the RLS policy — not denormalized onto this table.
+model Question {
+  id       String       @id @default(cuid())
+  surveyId String
+  type     QuestionType
+  text     String
+  order    Int
+
+  survey  Survey   @relation(fields: [surveyId], references: [id])
+  answers Answer[]
+
+  @@index([surveyId])
+  @@map("questions")
+}
+
+model Response {
+  id          String   @id @default(cuid())
+  surveyId    String
+  userId      String
+  orgId       String
+  weekStart   DateTime @db.Date
+  submittedAt DateTime @default(now())
+
+  survey  Survey   @relation(fields: [surveyId], references: [id])
+  user    User     @relation(fields: [userId], references: [id])
+  answers Answer[]
+
+  @@unique([surveyId, userId, weekStart])
+  @@index([orgId])
+  @@map("responses")
+}
+
+/// value shape depends on the parent Question's type: {"rating": 1-5} or {"yesNo": true|false}.
+/// Validated in app code on write, not DB-constrained. orgId scoped transitively via Response.
+model Answer {
+  id         String @id @default(cuid())
+  responseId String
+  questionId String
+  value      Json
+
+  response Response @relation(fields: [responseId], references: [id])
+  question Question @relation(fields: [questionId], references: [id])
+
+  @@unique([responseId, questionId])
+  @@map("answers")
+}
