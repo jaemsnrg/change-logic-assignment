@@ -68,3 +68,15 @@ Log of conversations with AI coding agents (e.g. Claude Code) used to produce wo
 - Created `api/prisma/schema.prisma` (Prisma is not yet installed in `api/package.json` — flagged as a prerequisite before this can run).
 - Hand-authored `api/prisma/migrations/20260915120000_init/migration.sql` (+ `migration_lock.toml`): table/enum/FK/index DDL, plus RLS `ENABLE ROW LEVEL SECURITY` / `FORCE ROW LEVEL SECURITY` / `CREATE POLICY` per tenant-scoped table — direct `orgId` check for `users`/`surveys`/`responses`, transitive `EXISTS` subquery via the parent for `questions`/`answers` (no `orgId` column on those two). Used `current_setting('app.tenant_id', true)` so missing tenant context denies by default rather than leaking rows, per ADR-0001.
 - Did not run the migration against the database or install Prisma — left both for explicit user review/approval first.
+
+## Session — 2026-09-15 (Claude Code, Sonnet 5)
+
+**Prompt:** "resolve error while running Prisma migration: Error code: P1012 error: The datasource property `url` is no longer supported in schema files..." (Prisma 7 schema validation failure)
+
+- Diagnosed: `api/prisma/schema.prisma`'s `datasource db { url = env("DATABASE_URL") }` is invalid under Prisma 7 — connection URLs must move to `prisma.config.ts`, paired with either a driver `adapter` (direct connection) or `accelerateUrl`.
+- Removed the `url` line from the `datasource` block in `schema.prisma`.
+- Installed `@prisma/client`, `@prisma/adapter-pg`, `pg`, and `@types/pg` in `api/` (none were present — `api/package.json` only had `prisma` as a dev dependency).
+- Created `api/prisma.config.ts`: `defineConfig` with `schema: "prisma/schema.prisma"`, a top-level `datasource.url` (required separately by `prisma migrate status`/`deploy`), and a `migrate.adapter` returning a `PrismaPg` instance built from `DATABASE_URL`. Added `process.loadEnvFile()` at the top since `.env` wasn't being picked up automatically when `prisma.config.ts`'s top-level object literal evaluated `process.env.DATABASE_URL`.
+- Verified fix via `prisma validate`, `prisma generate`, and `prisma migrate status`/`migrate deploy` (chained failures surfaced incrementally: missing config → missing `datasource.url` → env not loaded → DB unreachable).
+- While verifying DB connectivity, found a pre-existing, unrelated mismatch: `docker-compose.yml` mapped Postgres to `5432:5432`, but `api/.env`/`api/.env-template` both expect `localhost:5433`. Asked the user how to reconcile it; user chose to fix `docker-compose.yml`.
+- Changed `docker-compose.yml`'s port mapping to `5433:5432`, recreated the container (`docker compose up -d`), and confirmed `prisma migrate deploy` successfully applies `20260915120000_init` end-to-end against the running database.
