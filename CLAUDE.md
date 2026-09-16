@@ -20,6 +20,7 @@ Tenant isolation is enforced at two layers (see `docs/adr/adr-0001-multi-tenancy
 ## Code style
 
 - Client (`/client`): prefer ES6 arrow functions (`const Foo = () => {}`) over `function` declarations for components, hooks, and helpers. Exception: files generated/managed by `shadcn` CLI (`app/components/ui/*`) — leave their style as generated so re-running `shadcn add` doesn't produce noisy diffs.
+- Prefer higher-order array methods (`map`/`filter`/`reduce`/etc.) over manual `for` loops when building up a derived value.
 
 ## Testing
 
