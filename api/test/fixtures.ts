@@ -25,17 +25,17 @@ export async function seedOrgWithActiveSurvey(prisma: PrismaService, namePrefix:
     const activeSurvey = await tx.survey.create({
       data: { orgId: org.id, title: `${namePrefix} Active Survey`, isActive: true },
     });
-    await tx.question.create({
+    const yesNoQuestion = await tx.question.create({
       data: { surveyId: activeSurvey.id, type: 'yesNo', text: 'Second question', order: 2 },
     });
-    await tx.question.create({
+    const ratingQuestion = await tx.question.create({
       data: { surveyId: activeSurvey.id, type: 'rating', text: 'First question', order: 1 },
     });
-    await tx.survey.create({
+    const inactiveSurvey = await tx.survey.create({
       data: { orgId: org.id, title: `${namePrefix} Inactive Survey`, isActive: false },
     });
 
-    return { org, manager, member, activeSurvey };
+    return { org, manager, member, activeSurvey, inactiveSurvey, ratingQuestion, yesNoQuestion };
   });
 }
 
