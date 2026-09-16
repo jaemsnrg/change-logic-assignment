@@ -13,6 +13,7 @@ import { Badge } from "~/components/ui/badge";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
+import { SurveySummaryView } from "~/components/survey-summary-view";
 
 const QUESTION_TYPE_LABEL: Record<ActiveSurvey["questions"][number]["type"], string> = {
   rating: "Rating (1–5)",
@@ -154,11 +155,13 @@ export const ActiveSurveyView = ({
   const [survey, setSurvey] = useState<ActiveSurvey | null>(null);
   const [state, setState] = useState<"loading" | "no-survey" | "error" | "ready">("loading");
   const [submitted, setSubmitted] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
 
   useEffect(() => {
     setState("loading");
     setSurvey(null);
     setSubmitted(false);
+    setShowSummary(false);
 
     Promise.all([getMe(userId), getActiveSurvey(userId)])
       .then(([meResult, surveyResult]) => {
@@ -248,8 +251,15 @@ export const ActiveSurveyView = ({
                 <Badge variant="outline">{QUESTION_TYPE_LABEL[q.type]}</Badge>
               </div>
             ))}
+            <Button variant="outline" size="sm" onClick={() => setShowSummary((prev) => !prev)}>
+              {showSummary ? "Hide summary" : "View summary"}
+            </Button>
           </CardContent>
         </Card>
+      )}
+
+      {state === "ready" && survey && !showForm && showSummary && (
+        <SurveySummaryView userId={userId} surveyId={survey.id} />
       )}
     </div>
   );

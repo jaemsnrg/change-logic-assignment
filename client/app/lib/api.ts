@@ -36,6 +36,24 @@ export interface SurveyResponse {
   answers: { id: string; questionId: string; value: unknown }[];
 }
 
+export interface SurveySummary {
+  surveyId: string;
+  weekStart: string;
+  completion: {
+    count: number;
+    total: number;
+    rate: number | null;
+  };
+  questions: {
+    questionId: string;
+    type: "rating" | "yesNo";
+    text: string;
+    order: number;
+    rating?: { average: number | null; count: number };
+    yesNo?: { true: number; false: number };
+  }[];
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -73,3 +91,6 @@ export const submitSurveyResponse = (userId: string, surveyId: string, answers: 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ answers }),
   });
+
+export const getSurveySummary = (userId: string, surveyId: string) =>
+  apiFetch<SurveySummary>(`/surveys/${surveyId}/summary`, userId);

@@ -80,9 +80,9 @@ function weekStartUTC(d: Date): Date {
 
 function answerValueFor(type: QuestionSeed["type"]): Prisma.InputJsonValue {
   if (type === "rating") {
-    return { rating: 1 + Math.floor(Math.random() * 5) };
+    return 1 + Math.floor(Math.random() * 5);
   }
-  return { yesNo: Math.random() < 0.7 };
+  return Math.random() < 0.7;
 }
 
 /** Runs `fn` inside a transaction with the RLS tenant context set for `orgId`. */
