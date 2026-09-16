@@ -10,6 +10,7 @@ A multi-tenant survey app. See `specs/overall.md` for the domain/feature spec an
 
 ## Development
 
+*Runs install / dev across front and backend*
 ```sh
 npm run install:all
 npm run dev
@@ -17,7 +18,9 @@ npm run dev
 
 Starts the API (http://localhost:3000) and client (http://localhost:5173) concurrently.
 
-Other useful scripts:
+*Other useful scripts:*
+
+while checked out in /api directory (backend):
 - `npm run db:up` / `npm run db:down` — start/stop the Postgres container
 - `npx prisma migrate dev` — apply pending migrations to your local dev database
-- `npm run db:seed --prefix api` — populate dummy orgs/users/surveys/responses for local dev
+- `npm run db:seed` — populate dummy orgs/users/surveys/responses for local dev (also resets if required)

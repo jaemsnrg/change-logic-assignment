@@ -42,3 +42,10 @@
   - agent attempts to write member check directly into controller, as this is to be used elsewhere, I think it is better written as a Guard
   - RLS not ideally located as a raw SQL in 
   - ensure null values in our data are clearly mapped to their meaning - eg "No user submission"
+
+
+## deployment to AWS
+  - FE - deploy using Amplify + Github Actions when merging into target branch after CI/CD success
+  - BE - NestJS Containerized and deployed to ECS on Fargate. Would need to configure load balancing, and autoscaling
+  - DB - Managed RDS instance
+  - Hosting company Logos - Store in private s3 bucket for cheap reads, backend serves short-lived, presigined urls for access
