@@ -1,4 +1,9 @@
-# SPEC — [feature name]
+# SPEC — [000 - feature name]
+
+Keep specs brief. Favor short bullets and terse table cells over prose —
+this is a working reference to build from and approve, not a design essay.
+Cut a section entirely (e.g. "Non-goals") rather than filling it with
+restated boilerplate.
 
 ## Goal
 

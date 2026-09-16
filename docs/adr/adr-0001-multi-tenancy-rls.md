@@ -20,6 +20,12 @@ Use Postgres Row-Level Security (RLS) as the enforcement boundary, with Prisma a
 - Application code still passes `orgId` explicitly wherever required (per `CLAUDE.md`); RLS is a defense-in-depth backstop, not a replacement for that discipline.
 - `orgId` for the request is derived from authenticated request context (not client-supplied query/body params) before being set as the session variable, to prevent tenant spoofing.
 
+## Update — 2026-09-16
+
+Resolved: `pulse_app` (NOSUPERUSER, NOBYPASSRLS, not the owner) is now the
+runtime role (`RUNTIME_DATABASE_URL`); `pulse` is migrations/seed only. See
+`runtime_role_no_bypass_rls` migration.
+
 ## Consequences
 
 - Requires every tenant-scoped query to run through the transaction wrapper that sets `app.tenant_id`; connection-pooled or raw queries that bypass this wrapper will either see no rows (if RLS defaults to deny) or must be explicitly excluded and justified.
