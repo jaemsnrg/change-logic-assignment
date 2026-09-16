@@ -17,6 +17,10 @@ Tenant isolation is enforced at two layers (see `docs/adr/adr-0001-multi-tenancy
 - **Application layer**: explicit `orgId` on every tenant-scoped query, as above.
 - **Database layer**: Postgres Row-Level Security (RLS) on every tenant-scoped table, backed by Prisma. A NestJS interceptor/middleware sets the tenant context at the top of each request via `SET LOCAL app.tenant_id` inside a transaction wrapper, so RLS policies constrain every query for that request even if an `orgId` filter is ever missed in application code. Every new tenant-scoped table's migration must enable RLS and add its policy alongside the schema change.
 
+## Code style
+
+- Client (`/client`): prefer ES6 arrow functions (`const Foo = () => {}`) over `function` declarations for components, hooks, and helpers. Exception: files generated/managed by `shadcn` CLI (`app/components/ui/*`) — leave their style as generated so re-running `shadcn add` doesn't produce noisy diffs.
+
 ## Testing
 
 - All endpoints must be tested.
