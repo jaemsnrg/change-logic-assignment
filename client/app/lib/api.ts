@@ -20,6 +20,20 @@ export interface ActiveSurvey {
   title: string;
   isActive: boolean;
   questions: Question[];
+  hasResponded: boolean;
+}
+
+export interface AnswerInput {
+  questionId: string;
+  value: number | boolean;
+}
+
+export interface SurveyResponse {
+  id: string;
+  surveyId: string;
+  userId: string;
+  weekStart: string;
+  answers: { id: string; questionId: string; value: unknown }[];
 }
 
 export class ApiError extends Error {
@@ -31,9 +45,13 @@ export class ApiError extends Error {
   }
 }
 
-const apiFetch = async <T>(path: string, userId?: string): Promise<T> => {
+const apiFetch = async <T>(path: string, userId?: string, init?: RequestInit): Promise<T> => {
   const res = await fetch(`${API_URL}${path}`, {
-    headers: userId ? { "X-User-Id": userId } : undefined,
+    ...init,
+    headers: {
+      ...(userId ? { "X-User-Id": userId } : undefined),
+      ...init?.headers,
+    },
   });
 
   if (!res.ok) {
@@ -48,3 +66,10 @@ export const getUsers = () => apiFetch<UserSummary[]>("/users");
 export const getMe = (userId: string) => apiFetch<UserSummary>("/me", userId);
 
 export const getActiveSurvey = (userId: string) => apiFetch<ActiveSurvey>("/surveys/active", userId);
+
+export const submitSurveyResponse = (userId: string, surveyId: string, answers: AnswerInput[]) =>
+  apiFetch<SurveyResponse>(`/surveys/${surveyId}/responses`, userId, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ answers }),
+  });

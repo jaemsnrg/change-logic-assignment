@@ -177,3 +177,30 @@ Log of conversations with AI coding agents (e.g. Claude Code) used to produce wo
 - Removed the now-redundant "Manager → 403" controller unit test (that behavior moved out of the controller and into the guard, already covered by `roles.guard.spec.ts`); e2e coverage needed no change since it exercises the real HTTP pipeline.
 - Updated spec 002's Key decisions row and added implementation notes recording the refactor and its rationale.
 - Re-verified: 33/33 unit tests, 22/22 e2e tests, clean build/lint.
+
+**Prompt:** "please fulfil the client work on 002-submit-survey-response.md. The backend is in place"
+
+- Read spec 002's "Client" scope line, the existing `active-survey-view.tsx`/`api.ts` from spec 001, and the backend controller/service/e2e test to confirm the exact response shapes (`hasResponded` on `GET /surveys/active`; `201` + created `Response`/`answers` on `POST /surveys/:id/responses`; `404`/`409`/`400`/`403` error codes).
+- Extended `app/lib/api.ts`: `hasResponded` on `ActiveSurvey`, new `AnswerInput`/`SurveyResponse` types, `submitSurveyResponse()`.
+- Rewrote `app/components/active-survey-view.tsx`: added a `SurveyForm` (rating as 5 toggle `Button`s, yesNo as Yes/No `Button`s — reused the existing `Button` component rather than pulling in a new shadcn primitive for this), Submit disabled until every question answered. Branches on `me.role`: Managers keep the 001 read-only card (submission is Member-only per the `RolesGuard`); Members see the form, or a confirmation `Alert` if `hasResponded` is already true or after a successful submit. A `409` from submit (duplicate-this-week race) is treated as success and also flips to confirmation, since either way a response now exists.
+- `npm run typecheck` clean in `client`.
+- Verified live end-to-end via Chrome DevTools MCP against the real API + Postgres (not just typecheck): started `api` and `client` dev servers, worked around two pre-existing environment snags (a stale `react-router dev` process pinning port 5173, which broke CORS since the API only allows `http://localhost:5173`; and a leftover disconnected Chrome instance from a prior MCP session) by killing and restarting the affected processes. Drove all three states in-browser: Member with no response → form renders, Submit disabled until answered, enables once all 3 questions answered, submits → confirmation; confirmation persists across a page reload (server-derived `hasResponded`); Manager → read-only card, no form. Restored the API dev process I'd inadvertently killed while cleaning up.
+- Updated spec 002's implementation notes with the client-side file list and the verification method.
+
+**Prompt:** "Include a status against each users' name for availability of survey (survey available, survey complete). The first should be in a yellow, pending colour, and the second green, complete. Move the member / manager pill immediately after the name"
+
+- Updated `app/components/user-picker.tsx`: since `GET /users` is the public cross-org directory with no survey-status field, and `hasResponded` is per-caller, fetched each listed user's status via `getActiveSurvey(user.id)` in parallel (`Promise.allSettled`) after the user list loads. Added an amber "Survey available" / emerald "Survey complete" `Badge` per user (no badge if the user's org has no active survey), and moved the Member/Manager role badge to sit immediately after the name rather than at the card's trailing edge.
+- `npm run typecheck` clean; verified visually via Chrome DevTools MCP screenshot against the live app (both orgs' users showing correct green/yellow status matching seeded response data, role pill relocated next to name).
+- Updated spec 002's implementation notes with this change.
+
+**Prompt:** "if they are a manager, they should not have a status, please also separate them from users with sub-headings"
+
+- `app/components/user-picker.tsx`: restricted the `getActiveSurvey` status fetch to Members only (Managers can't submit responses per `@Roles('Member')`, so `hasResponded` isn't a meaningful concept for them — dropped the badge entirely rather than showing something misleading). Split each org's user list into "MANAGERS" and "MEMBERS" sub-headings (`ROLE_GROUPS` render order).
+- `npm run typecheck` clean; verified visually via Chrome DevTools MCP screenshot — Managers show no status badge, sub-headings render correctly under each org.
+- Updated spec 002's implementation notes with this change.
+
+**Prompt:** "increase the scale of the company name header"
+
+- `app/components/user-picker.tsx`: scaled the org name `h2` from `text-sm font-medium text-muted-foreground` to `text-2xl font-semibold text-foreground` so it reads as the primary heading for each org group (previously the same size as the new "MANAGERS"/"MEMBERS" sub-headings).
+- `npm run typecheck` clean; verified visually via Chrome DevTools MCP screenshot.
+- Updated spec 002's implementation notes with this change.

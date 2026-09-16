@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
-import { ApiError, getActiveSurvey, getMe, type ActiveSurvey, type UserSummary } from "~/lib/api";
+import {
+  ApiError,
+  getActiveSurvey,
+  getMe,
+  submitSurveyResponse,
+  type ActiveSurvey,
+  type AnswerInput,
+  type UserSummary,
+} from "~/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -9,6 +17,130 @@ import { Button } from "~/components/ui/button";
 const QUESTION_TYPE_LABEL: Record<ActiveSurvey["questions"][number]["type"], string> = {
   rating: "Rating (1–5)",
   yesNo: "Yes / No",
+};
+
+const RATING_VALUES = [1, 2, 3, 4, 5];
+
+const QuestionInput = ({
+  question,
+  value,
+  onChange,
+}: {
+  question: ActiveSurvey["questions"][number];
+  value: number | boolean | undefined;
+  onChange: (value: number | boolean) => void;
+}) => {
+  if (question.type === "rating") {
+    return (
+      <div className="flex gap-1.5">
+        {RATING_VALUES.map((rating) => (
+          <Button
+            key={rating}
+            type="button"
+            size="icon"
+            variant={value === rating ? "default" : "outline"}
+            onClick={() => onChange(rating)}
+            aria-pressed={value === rating}
+          >
+            {rating}
+          </Button>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex gap-1.5">
+      <Button
+        type="button"
+        variant={value === true ? "default" : "outline"}
+        onClick={() => onChange(true)}
+        aria-pressed={value === true}
+      >
+        Yes
+      </Button>
+      <Button
+        type="button"
+        variant={value === false ? "default" : "outline"}
+        onClick={() => onChange(false)}
+        aria-pressed={value === false}
+      >
+        No
+      </Button>
+    </div>
+  );
+};
+
+const SurveyForm = ({
+  survey,
+  userId,
+  onSubmitted,
+}: {
+  survey: ActiveSurvey;
+  userId: string;
+  onSubmitted: () => void;
+}) => {
+  const [answers, setAnswers] = useState<Record<string, number | boolean>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const allAnswered = survey.questions.every((q) => answers[q.id] !== undefined);
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    setError(null);
+
+    const payload: AnswerInput[] = survey.questions.map((q) => ({
+      questionId: q.id,
+      value: answers[q.id],
+    }));
+
+    try {
+      await submitSurveyResponse(userId, survey.id, payload);
+      onSubmitted();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        onSubmitted();
+        return;
+      }
+      setError("Couldn't submit your response. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{survey.title}</CardTitle>
+        <CardDescription>{survey.questions.length} question(s)</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {error && (
+          <Alert variant="destructive">
+            <AlertTitle>Submission failed</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        {survey.questions.map((q) => (
+          <div key={q.id} className="flex flex-col gap-2 rounded-md border p-3">
+            <div className="flex items-start justify-between gap-4">
+              <span>{q.text}</span>
+              <Badge variant="outline">{QUESTION_TYPE_LABEL[q.type]}</Badge>
+            </div>
+            <QuestionInput
+              question={q}
+              value={answers[q.id]}
+              onChange={(value) => setAnswers((prev) => ({ ...prev, [q.id]: value }))}
+            />
+          </div>
+        ))}
+        <Button disabled={!allAnswered || submitting} onClick={handleSubmit}>
+          {submitting ? "Submitting…" : "Submit"}
+        </Button>
+      </CardContent>
+    </Card>
+  );
 };
 
 export const ActiveSurveyView = ({
@@ -21,10 +153,12 @@ export const ActiveSurveyView = ({
   const [me, setMe] = useState<UserSummary | null>(null);
   const [survey, setSurvey] = useState<ActiveSurvey | null>(null);
   const [state, setState] = useState<"loading" | "no-survey" | "error" | "ready">("loading");
+  const [submitted, setSubmitted] = useState(false);
 
   useEffect(() => {
     setState("loading");
     setSurvey(null);
+    setSubmitted(false);
 
     Promise.all([getMe(userId), getActiveSurvey(userId)])
       .then(([meResult, surveyResult]) => {
@@ -67,6 +201,9 @@ export const ActiveSurveyView = ({
     );
   }
 
+  const showForm = state === "ready" && survey && me?.role === "Member";
+  const alreadyResponded = Boolean(survey?.hasResponded) || submitted;
+
   return (
     <div className="flex flex-col gap-4">
       {me && (
@@ -87,7 +224,18 @@ export const ActiveSurveyView = ({
         </Alert>
       )}
 
-      {state === "ready" && survey && (
+      {state === "ready" && survey && showForm && alreadyResponded && (
+        <Alert>
+          <AlertTitle>You're all set</AlertTitle>
+          <AlertDescription>Thanks for submitting your response to "{survey.title}" this week.</AlertDescription>
+        </Alert>
+      )}
+
+      {state === "ready" && survey && showForm && !alreadyResponded && (
+        <SurveyForm survey={survey} userId={userId} onSubmitted={() => setSubmitted(true)} />
+      )}
+
+      {state === "ready" && survey && !showForm && (
         <Card>
           <CardHeader>
             <CardTitle>{survey.title}</CardTitle>
