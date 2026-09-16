@@ -53,4 +53,25 @@ describe('SurveysController', () => {
       });
     });
   });
+
+  describe('GET /surveys/:id/summary', () => {
+    // Manager/Member enforcement is RolesGuard's job — see auth/roles.guard.spec.ts.
+    it('delegates to the service with tx, orgId, and surveyId (route param)', async () => {
+      const summary = {
+        surveyId: 's1',
+        weekStart: new Date('2026-09-14T00:00:00Z'),
+        completion: { count: 2, total: 3, rate: 0.67 },
+        questions: [],
+      };
+      const service = { getSurveySummary: vi.fn().mockResolvedValue(summary) } as unknown as SurveysService;
+      const controller = new SurveysController(service);
+      const tx = {};
+      const request = requestWithTenant('org-1', tx, 'Manager', 'mgr-1');
+
+      const result = await controller.getSummary(request, 's1');
+
+      expect(result).toBe(summary);
+      expect(service.getSurveySummary).toHaveBeenCalledWith(tx, 'org-1', 's1');
+    });
+  });
 });

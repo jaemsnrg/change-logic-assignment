@@ -7,10 +7,12 @@ import type { Prisma as PrismaNS } from '@prisma/client';
 const RATING_QUESTION = { id: 'q1', surveyId: 's1', type: 'rating', text: 'First question', order: 1 };
 const YES_NO_QUESTION = { id: 'q2', surveyId: 's1', type: 'yesNo', text: 'Second question', order: 2 };
 
-function txWith(overrides: Partial<Record<'survey' | 'response', unknown>>) {
+function txWith(overrides: Partial<Record<'survey' | 'response' | 'user' | 'answer', unknown>>) {
   return {
     survey: { findFirst: vi.fn() },
-    response: { findFirst: vi.fn(), create: vi.fn() },
+    response: { findFirst: vi.fn(), create: vi.fn(), count: vi.fn() },
+    user: { count: vi.fn() },
+    answer: { findMany: vi.fn() },
     ...overrides,
   } as unknown as PrismaNS.TransactionClient;
 }
@@ -222,6 +224,167 @@ describe('SurveysService', () => {
       const service = new SurveysService();
 
       await expect(service.submitResponse(tx, baseArgs)).rejects.toBeInstanceOf(ConflictException);
+    });
+  });
+
+  describe('getSurveySummary', () => {
+    const activeSurvey = {
+      id: 's1',
+      orgId: 'org-1',
+      title: 'Weekly Pulse',
+      isActive: true,
+      questions: [YES_NO_QUESTION, RATING_QUESTION], // deliberately unordered (order: 2, then 1)
+    };
+
+    function summaryTx(overrides: Partial<Record<'survey' | 'response' | 'user' | 'answer', unknown>> = {}) {
+      return txWith({
+        survey: { findFirst: vi.fn().mockResolvedValue(activeSurvey) },
+        user: { count: vi.fn().mockResolvedValue(0) },
+        response: { count: vi.fn().mockResolvedValue(0) },
+        answer: { findMany: vi.fn().mockResolvedValue([]) },
+        ...overrides,
+      });
+    }
+
+    it('throws NotFoundException when the survey does not resolve for the org (wrong org / unknown id)', async () => {
+      const tx = txWith({ survey: { findFirst: vi.fn().mockResolvedValue(null) } });
+      const service = new SurveysService();
+
+      await expect(service.getSurveySummary(tx, 'org-1', 's1')).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('throws ConflictException when the survey is not currently active', async () => {
+      const tx = summaryTx({ survey: { findFirst: vi.fn().mockResolvedValue({ ...activeSurvey, isActive: false }) } });
+      const service = new SurveysService();
+
+      await expect(service.getSurveySummary(tx, 'org-1', 's1')).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('computes completion count/total/rate from Member count and distinct current-week Responses', async () => {
+      const userCount = vi.fn().mockResolvedValue(4);
+      const responseCount = vi.fn().mockResolvedValue(3);
+      const tx = summaryTx({ user: { count: userCount }, response: { count: responseCount } });
+      const service = new SurveysService();
+
+      const result = await service.getSurveySummary(tx, 'org-1', 's1');
+
+      expect(result.completion).toEqual({ count: 3, total: 4, rate: 0.75 });
+      expect(userCount).toHaveBeenCalledWith({ where: { orgId: 'org-1', role: 'Member' } });
+      expect(responseCount).toHaveBeenCalledWith({ where: { surveyId: 's1', weekStart: expect.any(Date) } });
+    });
+
+    it('rounds completion.rate to 2 decimal places', async () => {
+      const tx = summaryTx({
+        user: { count: vi.fn().mockResolvedValue(3) },
+        response: { count: vi.fn().mockResolvedValue(2) },
+      });
+      const service = new SurveysService();
+
+      const result = await service.getSurveySummary(tx, 'org-1', 's1');
+
+      expect(result.completion.rate).toBe(0.67);
+    });
+
+    it('returns completion.rate: null (not 0) when the org has zero Members', async () => {
+      const tx = summaryTx({
+        user: { count: vi.fn().mockResolvedValue(0) },
+        response: { count: vi.fn().mockResolvedValue(0) },
+      });
+      const service = new SurveysService();
+
+      const result = await service.getSurveySummary(tx, 'org-1', 's1');
+
+      expect(result.completion).toEqual({ count: 0, total: 0, rate: null });
+    });
+
+    it('returns a rating rollup with average rounded to 2 decimals and the answer count', async () => {
+      const tx = summaryTx({
+        answer: {
+          findMany: vi.fn().mockResolvedValue([
+            { questionId: 'q1', value: 4 },
+            { questionId: 'q1', value: 4 },
+            { questionId: 'q1', value: 5 },
+          ]),
+        },
+      });
+      const service = new SurveysService();
+
+      const result = await service.getSurveySummary(tx, 'org-1', 's1');
+
+      const ratingRollup = result.questions.find((q) => q.questionId === 'q1');
+      expect(ratingRollup?.rating).toEqual({ average: 4.33, count: 3 });
+    });
+
+    it('returns rating average: null and count: 0 when a rating question has no answers yet this week', async () => {
+      const tx = summaryTx({ answer: { findMany: vi.fn().mockResolvedValue([]) } });
+      const service = new SurveysService();
+
+      const result = await service.getSurveySummary(tx, 'org-1', 's1');
+
+      const ratingRollup = result.questions.find((q) => q.questionId === 'q1');
+      expect(ratingRollup?.rating).toEqual({ average: null, count: 0 });
+    });
+
+    it('returns a yesNo rollup as counts per boolean option', async () => {
+      const tx = summaryTx({
+        answer: {
+          findMany: vi.fn().mockResolvedValue([
+            { questionId: 'q2', value: true },
+            { questionId: 'q2', value: true },
+            { questionId: 'q2', value: false },
+          ]),
+        },
+      });
+      const service = new SurveysService();
+
+      const result = await service.getSurveySummary(tx, 'org-1', 's1');
+
+      const yesNoRollup = result.questions.find((q) => q.questionId === 'q2');
+      expect(yesNoRollup?.yesNo).toEqual({ true: 2, false: 1 });
+    });
+
+    it('defaults yesNo counts to { true: 0, false: 0 } when there are no answers yet this week', async () => {
+      const tx = summaryTx();
+      const service = new SurveysService();
+
+      const result = await service.getSurveySummary(tx, 'org-1', 's1');
+
+      const yesNoRollup = result.questions.find((q) => q.questionId === 'q2');
+      expect(yesNoRollup?.yesNo).toEqual({ true: 0, false: 0 });
+    });
+
+    it('includes questionId, type, text, and order per question, ordered by question order', async () => {
+      const tx = summaryTx();
+      const service = new SurveysService();
+
+      const result = await service.getSurveySummary(tx, 'org-1', 's1');
+
+      expect(result.questions.map((q) => q.order)).toEqual([1, 2]);
+      expect(result.questions[0]).toMatchObject({ questionId: 'q1', type: 'rating', text: 'First question', order: 1 });
+      expect(result.questions[1]).toMatchObject({ questionId: 'q2', type: 'yesNo', text: 'Second question', order: 2 });
+    });
+
+    it('scopes the answer lookup to this survey and the current week', async () => {
+      const findMany = vi.fn().mockResolvedValue([]);
+      const tx = summaryTx({ answer: { findMany } });
+      const service = new SurveysService();
+
+      await service.getSurveySummary(tx, 'org-1', 's1');
+
+      expect(findMany).toHaveBeenCalledWith({
+        where: { response: { surveyId: 's1', weekStart: expect.any(Date) } },
+        select: { questionId: true, value: true },
+      });
+    });
+
+    it('includes the current week start in the response', async () => {
+      const tx = summaryTx();
+      const service = new SurveysService();
+
+      const result = await service.getSurveySummary(tx, 'org-1', 's1');
+
+      expect(result.surveyId).toBe('s1');
+      expect(result.weekStart).toEqual(expect.any(Date));
     });
   });
 });

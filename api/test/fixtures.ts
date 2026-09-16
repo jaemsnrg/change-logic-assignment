@@ -39,6 +39,29 @@ export async function seedOrgWithActiveSurvey(prisma: PrismaService, namePrefix:
   });
 }
 
+/** Adds an extra Member to an already-seeded org (e.g. for multi-Member completion-rate scenarios). */
+export async function addMember(prisma: PrismaService, orgId: string, namePrefix: string) {
+  return withTenant(prisma, orgId, (tx) => tx.user.create({ data: { orgId, name: namePrefix, role: 'Member' } }));
+}
+
+export async function seedOrgWithActiveSurveyNoMembers(prisma: PrismaService, namePrefix: string) {
+  const org = await prisma.organization.create({ data: { name: `${namePrefix} Org` } });
+
+  return withTenant(prisma, org.id, async (tx) => {
+    const manager = await tx.user.create({
+      data: { orgId: org.id, name: `${namePrefix} Manager`, role: 'Manager' },
+    });
+    const activeSurvey = await tx.survey.create({
+      data: { orgId: org.id, title: `${namePrefix} Active Survey`, isActive: true },
+    });
+    const ratingQuestion = await tx.question.create({
+      data: { surveyId: activeSurvey.id, type: 'rating', text: 'Only question', order: 1 },
+    });
+
+    return { org, manager, activeSurvey, ratingQuestion };
+  });
+}
+
 export async function seedOrgWithNoActiveSurvey(prisma: PrismaService, namePrefix: string) {
   const org = await prisma.organization.create({ data: { name: `${namePrefix} Org` } });
 
