@@ -49,7 +49,7 @@ RLS is enforced against a non-superuser runtime role (`pulse_app`); `pulse` (own
 
 ## API / interface surface
 
-Built incrementally, one endpoint/feature per spec. `specs/001-view-surveys.md` covers `GET /surveys/active`; `specs/002-submit-survey-response.md` covers `POST /surveys/:id/responses` (and extends `GET /surveys/active` with `hasResponded`); remaining rows below are unimplemented / future specs.
+Built incrementally, one endpoint/feature per spec. `specs/001-view-surveys.md` covers `GET /surveys/active`; `specs/002-submit-survey-response.md` covers `POST /surveys/:id/responses` (and extends `GET /surveys/active` with `hasResponded`); `specs/003-weekly-survey-summary.md` covers `GET /surveys/:id/summary`; remaining rows below are unimplemented / future specs.
 
 | Method | Route | Role |
 |---|---|---|

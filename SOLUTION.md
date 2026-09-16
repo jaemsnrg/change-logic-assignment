@@ -32,6 +32,7 @@
 - *skill use*: 
   - *grill-with-docs skill (by Matt Pocock)*: used to clarify and document requirements, as well as catch edge cases, and unconsidered implementation / feature aspects
   - *nestjs-expert*: adds layer of familiarity with key nestjs patterns
+  - *domain modeling*:
 - *supporting documentation*: 
 
 - *not in use* - as this is a small, single team project, it does not make sense to use parallel agents with git worktree pattern
@@ -40,3 +41,4 @@
 ## catches
   - agent attempts to write member check directly into controller, as this is to be used elsewhere, I think it is better written as a Guard
   - RLS not ideally located as a raw SQL in 
+  - ensure null values in our data are clearly mapped to their meaning - eg "No user submission"
