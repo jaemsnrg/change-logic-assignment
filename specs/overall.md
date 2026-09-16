@@ -61,11 +61,6 @@ Built incrementally, one endpoint/feature per spec. `specs/001-view-surveys.md` 
 | POST | `/surveys/:id/responses` | Member |
 | GET | `/surveys/:id/summary` | Manager |
 
-## Non-goals
-
-- Real auth/session management ([[adr-0002-header-based-local-auth]]).
-- Response editing, historical summaries, multi-active surveys, post-creation editing, org logo storage.
-
 ## Implementation notes
 
 - Rollups computed in app code (not SQL) since `Answer.value` is generic `Json` — see `specs/001-rest-api-endpoints.md`.

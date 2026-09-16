@@ -1,23 +1,23 @@
 # change-logic-assignment
-A simple app demonstrating a custom implementation of a multi-tenant survey app
 
-# architecture
-  - frontent (/client) - react (TS) + vite starter
-  - backend (/api) - next (TS) + vite starter
-  - db (docker-compose.yml) - 16 alpine postgress database in docker container
+A multi-tenant survey app. See `specs/overall.md` for the domain/feature spec and `docs/adr/` for architecture decisions.
 
-  # development
-  
-  Install dependencies for both apps, then run everything with one command:
-  
-  ```sh
-  npm run install:all
-  npm run dev
-  ```
-  
-  This starts the API (http://localhost:3000) and the client (http://localhost:5173) concurrently.
-  
-  Other useful scripts:
-    - `npm run db:up` / `npm run db:down` - start/stop the postgres container
-    - `npx prisma migrate dev` - apply pending migrations to your local dev database
-    - `npm run db:seed --prefix api` - populate dummy orgs/users/surveys/responses for local dev
+## Architecture
+
+- Frontend (`/client`) — React (TS) + Vite
+- Backend (`/api`) — NestJS (TS) + Vite
+- DB (`docker-compose.yml`) — Postgres 16 (alpine), in Docker
+
+## Development
+
+```sh
+npm run install:all
+npm run dev
+```
+
+Starts the API (http://localhost:3000) and client (http://localhost:5173) concurrently.
+
+Other useful scripts:
+- `npm run db:up` / `npm run db:down` — start/stop the Postgres container
+- `npx prisma migrate dev` — apply pending migrations to your local dev database
+- `npm run db:seed --prefix api` — populate dummy orgs/users/surveys/responses for local dev

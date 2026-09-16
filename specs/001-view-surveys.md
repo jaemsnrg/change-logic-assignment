@@ -44,8 +44,8 @@ No schema changes — builds on the existing `api/prisma/schema.prisma`.
 
 ## Implementation notes
 
-- shadcn/ui initialized in `client` via `npx shadcn@latest init -t react-router -b radix`; added `card`, `badge`, `skeleton`, `alert`.
+- shadcn/ui initialized in `client` (`npx shadcn@latest init -t react-router -b radix`); added `card`, `badge`, `skeleton`, `alert`.
 - `GET /users` is intentionally cross-org/unscoped — it's the pre-login directory the picker reads before any `X-User-Id` exists.
 - Auth bootstrap chicken-and-egg (need `orgId` before `app.tenant_id` can be set) fixed by `users_self_lookup_policy` migration: widens the RLS policy to also allow a single-row match on `app.requesting_user_id`.
-- **Resolved**: `pulse` is a Postgres superuser and bypassed RLS entirely. `runtime_role_no_bypass_rls` migration adds `pulse_app` (NOSUPERUSER, NOBYPASSRLS) as the role the API runs as (`RUNTIME_DATABASE_URL`); `pulse` is now migrations/seed only. `GET /users` got the same kind of explicit carve-out (`app.allow_public_directory`). See [[adr-0001-multi-tenancy-rls]]'s 2026-09-16 update.
-- Client: `app/lib/api.ts`, `app/lib/session.ts`, `app/components/user-picker.tsx`, `app/components/active-survey-view.tsx`, wired into `app/routes/home.tsx`. Verified via curl + typecheck; no live browser check this session (DevTools profile was locked by another session).
+- **Resolved**: `pulse` was a Postgres superuser and bypassed RLS entirely. `runtime_role_no_bypass_rls` migration adds `pulse_app` (NOSUPERUSER, NOBYPASSRLS) as the API's runtime role (`RUNTIME_DATABASE_URL`); `pulse` is now migrations/seed only. `GET /users` got an explicit carve-out (`app.allow_public_directory`). See [[adr-0001-multi-tenancy-rls]]'s 2026-09-16 update.
+- Client: `app/lib/api.ts`, `app/lib/session.ts`, `app/components/user-picker.tsx`, `app/components/active-survey-view.tsx`, wired into `app/routes/home.tsx`. Verified via curl + typecheck; no live browser check this session.
