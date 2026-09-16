@@ -143,3 +143,37 @@ Log of conversations with AI coding agents (e.g. Claude Code) used to produce wo
 
 - Replaced the loop with `Array.prototype.reduce`; verified typecheck stays clean and no other manual `for` loops remain in `client`/`api` `src`.
 - Added "prefer higher-order array methods over manual `for` loops" to `CLAUDE.md`'s Code style section.
+
+## Session — 2026-09-16 (Claude Code, Sonnet 5)
+
+**Prompt:** "/mattpocock-skills:grill-with-docs based on the overall requirement + assignment.pdf, please write out a spec to implement user survey submissions"
+
+- Read `docs/assignment.pdf`, `specs/overall.md`, `specs/001-view-surveys.md`, `CONTEXT.md`, both ADRs, and the current Prisma schema/client code to establish what was already settled vs. still open for `POST /surveys/:id/responses`.
+- Ran a `grilling` round on the genuinely open questions: answer wire format (array of `{questionId, value}`), whether the target survey must be the org's currently-active survey (yes → `409` if inactive), duplicate-submission status code (`409`), and whether `GET /surveys/active` should expose `hasResponded` upfront vs. relying on a lazy `409` (chose the upfront extension).
+- Wrote `specs/002-submit-survey-response.md`; fixed a stale filename reference in `specs/overall.md` (`001-rest-api-endpoints.md` → `001-view-surveys.md`) and pointed it at the new spec.
+
+**Prompt:** "thats good, please narrow it down" (ambiguous — clarified via `AskUserQuestion` whether to cut scope or just tighten wording)
+
+- User chose wording-only. Trimmed spec 002: cut the redundant "Non-goals" section (restated "Out of scope"), collapsed "In scope" bullet rationale into the "Key decisions" table, shortened table "Why" cells to phrases.
+
+**Prompt:** "good - please implement the tests for my approval"
+
+- TDD red phase, no source implementation written yet: `api/src/surveys/week.spec.ts` (new `getWeekStart` util, not yet created), extended `surveys.service.spec.ts` (`getActiveSurvey` gains `userId`/`hasResponded`; new `submitResponse` tests covering 404/409/400/201/409-duplicate), extended `surveys.controller.spec.ts` (`POST /surveys/:id/responses` — 403 for Manager, delegation for Member), new `api/test/surveys-responses.e2e-spec.ts`, and extended `api/test/fixtures.ts` to expose `inactiveSurvey`/`ratingQuestion`/`yesNoQuestion`.
+- Ran the suite to confirm 14 tests failed for the expected reason (missing module / method-not-a-function), not typos — presented as the TDD checkpoint before writing any implementation.
+
+**Prompt:** "good - please implement the feature"
+
+- Implemented `api/src/surveys/week.ts`, extended `SurveysService` (`getActiveSurvey` + `hasResponded` lookup; `submitResponse` — validates survey exists/active, answers match questions exactly, per-type value validation, creates `Response`+`Answer`s with server-derived `weekStart`/`orgId`/`userId`, maps Prisma `P2002` to `ConflictException`), and wired `POST /surveys/:id/responses` into `SurveysController` with an inline `user.role !== 'Member'` check.
+- Verified: 31/31 unit tests, 22/22 e2e tests (real Postgres), `nest build` clean, lint clean (aside from a pre-existing `unbound-method` warning, confirmed via `git stash` that it predates this session).
+
+**Prompt:** "is this check within the controller not better created as a guard?" (the inline Manager/Member role check)
+
+- Recommended yes: `overall.md`'s endpoint table has three more Manager-only routes coming (`POST /surveys`, `POST /surveys/:id/activate`, `GET /surveys/:id/summary`), so the "single call site" rationale in spec 002's original Key decisions row didn't hold up against the roadmap.
+
+**Prompt:** "yes, do that"
+
+- Added `api/src/auth/roles.decorator.ts` (`@Roles(...roles)` via `SetMetadata`) and `api/src/auth/roles.guard.ts` (`RolesGuard`, reads required roles off handler/class metadata via `Reflector`), plus `roles.guard.spec.ts`.
+- Replaced the controller's inline check with `@UseGuards(RolesGuard)` + `@Roles('Member')`; registered `RolesGuard` in `SurveysModule`'s providers.
+- Removed the now-redundant "Manager → 403" controller unit test (that behavior moved out of the controller and into the guard, already covered by `roles.guard.spec.ts`); e2e coverage needed no change since it exercises the real HTTP pipeline.
+- Updated spec 002's Key decisions row and added implementation notes recording the refactor and its rationale.
+- Re-verified: 33/33 unit tests, 22/22 e2e tests, clean build/lint.

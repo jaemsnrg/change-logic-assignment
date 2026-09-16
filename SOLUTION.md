@@ -35,3 +35,8 @@
 - *supporting documentation*: 
 
 - *not in use* - as this is a small, single team project, it does not make sense to use parallel agents with git worktree pattern
+
+
+## catches
+  - agent attempts to write member check directly into controller, as this is to be used elsewhere, I think it is better written as a Guard
+  - RLS not ideally located as a raw SQL in 

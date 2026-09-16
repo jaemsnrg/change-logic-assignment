@@ -28,7 +28,7 @@ A Member submits answers to their org's active survey — one Response per Membe
 | Survey visible but inactive | `409` | State conflict |
 | Duplicate response this week | `409` | Matches `unique(surveyId, userId, weekStart)` |
 | Missing/extra/invalid-type answers | `400` | Client-correctable |
-| Manager submits | `403` | Inline role check, no new `RolesGuard` for one call site |
+| Manager submits | `403` | `RolesGuard` + `@Roles('Member')` — `overall.md`'s API table has 3 more role-scoped endpoints coming, so the guard pays for itself immediately |
 | `hasResponded` | Boolean only, no content | Minimal; past-answer viewing out of scope |
 | Success response | `201` + created `Response`/`answers` | Matches `GET /surveys/active`'s nested shape |
 
@@ -45,4 +45,7 @@ No schema changes — `Response`/`Answer` already modeled in `api/prisma/schema.
 
 ## Implementation notes
 
-_Update as implementation proceeds — actual code, deviations, and links to ADRs._
+- `api/src/surveys/week.ts` — `getWeekStart()`, pure function, Monday 00:00 UTC.
+- `api/src/surveys/surveys.service.ts` — `getActiveSurvey` extended with `hasResponded`; `submitResponse` does existence/active/answer-shape/value-type validation then `tx.response.create` with nested `answers.create`, mapping a Prisma `P2002` unique-violation (duplicate week) to `ConflictException`.
+- Role enforcement moved from an inline controller check to `RolesGuard` (`api/src/auth/roles.guard.ts`) + `@Roles()` decorator (`api/src/auth/roles.decorator.ts`), reading required roles via `Reflector` off handler/class metadata — reusable for the Manager-only endpoints still to come (`POST /surveys`, `POST /surveys/:id/activate`, `GET /surveys/:id/summary`).
+- Tests: `api/src/surveys/{week,surveys.service,surveys.controller}.spec.ts`, `api/src/auth/roles.guard.spec.ts`, `api/test/surveys-responses.e2e-spec.ts`. All written before the implementation (TDD), confirmed red, then made green.

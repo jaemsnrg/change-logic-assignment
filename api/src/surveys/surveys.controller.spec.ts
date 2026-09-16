@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { SurveysController } from './surveys.controller.js';
 import { SurveysService } from './surveys.service.js';
 import type { Request } from 'express';
@@ -33,17 +33,7 @@ describe('SurveysController', () => {
   });
 
   describe('POST /surveys/:id/responses', () => {
-    it('throws ForbiddenException for a Manager caller, without calling the service', async () => {
-      const service = { submitResponse: vi.fn() } as unknown as SurveysService;
-      const controller = new SurveysController(service);
-      const request = requestWithTenant('org-1', {}, 'Manager', 'mgr-1');
-
-      await expect(
-        controller.submitResponse(request, 's1', { answers: [{ questionId: 'q1', value: 4 }] }),
-      ).rejects.toBeInstanceOf(ForbiddenException);
-      expect(service.submitResponse).not.toHaveBeenCalled();
-    });
-
+    // Manager/Member enforcement is RolesGuard's job — see auth/roles.guard.spec.ts.
     it('delegates to the service with tx, orgId, userId, surveyId (route param), and body answers', async () => {
       const created = { id: 'r1', surveyId: 's1', userId: 'u1', answers: [] };
       const service = { submitResponse: vi.fn().mockResolvedValue(created) } as unknown as SurveysService;
