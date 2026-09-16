@@ -91,3 +91,55 @@ Log of conversations with AI coding agents (e.g. Claude Code) used to produce wo
 - Wired it up via `prisma.config.ts`'s `migrations.seed` (the correct config key — first guessed `migrate.seed`, which Prisma 7 rejected with "No seed command configured") pointing at `node prisma/seed.ts`, run directly by Node 24's native TS type-stripping (no `ts-node`/`tsx` dependency needed). Added `api/package.json`'s `db:seed` script (`prisma db seed`).
 - Verified end-to-end against the running Docker Postgres: ran `db:seed` twice to confirm idempotency, and checked row counts per org matched the seed design (Acme: 5 users/2 surveys/4 questions/3 responses/9 answers; Globex: 4 users/1 survey/2 questions/1 response/2 answers).
 - Confirmed the pre-existing documented RLS gap in passing: querying `users` directly as the `pulse` role with no tenant context set returns all rows rather than zero, because `pulse` is a Postgres superuser (the official Postgres image makes `POSTGRES_USER` a superuser, which always bypasses RLS regardless of `FORCE`) — this matches the "Known gap" already called out in the init migration and `specs/pulse-surveys.md`, not a new issue introduced here.
+
+## Session — 2026-09-15/16 (Claude Code, Sonnet 5)
+
+**Prompt:** "using our spec driven development flow + TDD, please create the rest api endpoints as defined in the 'API / interface surface' of our spec file. Please note our ADRs and number the spec 001. create the spec first for my approval"
+
+- Drafted `specs/001-rest-api-endpoints.md` covering all 7 endpoints from `specs/overall.md`, referencing both ADRs, for approval before implementation.
+
+**Prompt:** "Please make it very brief, and document that in our spec template"
+
+- Trimmed spec 001 to ~40 lines and added a standing brevity note to `templates/spec_template.md` ("keep specs brief... cut a section entirely rather than filling it with restated boilerplate").
+
+**Prompt:** "scale back the overall spec"
+
+- Condensed `specs/overall.md` to match — shorter prose, condensed data model/decisions table, pointer to spec 001 instead of duplicating endpoint detail.
+
+**Prompt:** "keep the other changes, but for spec 1, lets create a feature end to end for our user: view active survey" (after an initial ambiguous "view current surveys" was clarified)
+
+- Rewrote spec 001 to scope a single vertical slice: `GET /surveys/active` end-to-end (auth guard, RLS interceptor, endpoint, TDD tests, client view), rather than all 7 endpoints.
+
+**Prompt:** "please add the use of shadcn components here to avoid writing boilerplate"
+
+- Added shadcn/ui (`Card`, `Badge`, `Skeleton`, `Alert`) to spec 001's in-scope client work and key decisions, noting it wasn't yet initialized in `client`.
+
+**Prompt:** "ok, build it"
+
+- API (TDD throughout, unit + e2e tests against real Postgres): `PrismaService`/`PrismaModule`; `AuthGuard` resolving `X-User-Id` → user (401 if missing/unknown); `TenantTransactionInterceptor` wrapping the handler in a transaction with `SET LOCAL`/`set_config('app.tenant_id', ...)` per ADR-0001; `GET /me`; `GET /surveys/active` (404 if none active, questions ordered).
+- Hit a chicken-and-egg problem: the auth guard needs a user's `orgId` before `app.tenant_id` can be set, but the original `users` RLS policy required `orgId = app.tenant_id` for every read. Fixed via a new migration (`20260916090000_users_self_lookup_policy`) widening the policy to allow a single-row match on a second session var (`app.requesting_user_id`), consistent with ADR-0002's existing "valid User.id can impersonate" trust model.
+- Added `GET /users` (undocumented in spec 001 originally, added and documented as a deviation) — a public, cross-org directory needed for the client's login picker, since there was otherwise no way to browse seeded users without hardcoding DB-generated IDs.
+- Attempted an e2e test proving RLS itself (not just the app-layer `orgId` filter) blocks a cross-tenant query; it failed — `docker-compose.yml`'s `pulse` role is a Postgres superuser, which always bypasses RLS regardless of `FORCE`. Documented as a known, pre-existing limitation (already tracked in `specs/overall.md`/ADR-0001) rather than silently asserting something false; dropped that specific test with an explanatory comment.
+- Client: initialized shadcn/ui (`npx shadcn@latest init -t react-router -b radix`, added `card`/`badge`/`skeleton`/`alert`), built `app/lib/api.ts`, `app/lib/session.ts`, `app/components/user-picker.tsx`, `app/components/active-survey-view.tsx`, wired into `app/routes/home.tsx`. Verified end-to-end via curl against the live API and `tsc`/`react-router typegen`; could not do a live browser check (Chrome DevTools MCP profile was locked by another running session).
+- Updated `specs/001-rest-api-endpoints.md` and `specs/overall.md` implementation notes throughout to record these deviations/decisions as they were made.
+
+**Prompt:** "lets create a new role that would not be able to bypass RLS"
+
+- Added migration `20260916100000_runtime_role_no_bypass_rls`: creates `pulse_app` (`NOSUPERUSER`, `NOBYPASSRLS`, not the table owner), grants it DML on all tables (+ default privileges for future migrations), and widens the `users` RLS policy again with an explicit `app.allow_public_directory` carve-out for `GET /users`' cross-org listing.
+- Split DB roles: `pulse` (owner/superuser) stays for migrations/seed via `DATABASE_URL`; the running API now connects as `pulse_app` via a new `RUNTIME_DATABASE_URL`, wired into `PrismaService`. Updated `UsersService.listAll()` to explicitly set `app.allow_public_directory` for its query.
+- Re-enabled the previously-dropped e2e test proving RLS blocks a filterless cross-tenant query — it now genuinely passes. Full suite (13 unit + 10 e2e) green, `nest build` clean, smoke-tested live against `pulse_app` via curl.
+- Updated `docs/adr/adr-0001-multi-tenancy-rls.md` (dated resolution note), `specs/overall.md`, and `specs/001-rest-api-endpoints.md` to reflect the gap is now closed rather than known/outstanding.
+
+**Prompt:** "simplify / condense comments made in this session"
+
+- Condensed verbose code comments added this session (migration headers, `AuthGuard`, `TenantTransactionInterceptor`, `UsersService`/`UsersController`, `PrismaService`, `.env`/`.env-template`) down to one line each, keeping only the essential why. Trimmed the spec 001 and ADR-0001 implementation notes similarly. Re-ran tests to confirm the comment-only changes didn't break anything.
+
+**Prompt:** "prefer es6 functions in client code, refactor now and add guidance in CLAUDE.md"
+
+- Refactored `client/app/lib/session.ts`, `api.ts`, `components/user-picker.tsx`, `components/active-survey-view.tsx`, and `routes/home.tsx` from `function` declarations to arrow functions; left `app/components/ui/*` untouched since those are shadcn-generated vendor files.
+- Added a "Code style" section to `CLAUDE.md` documenting the arrow-function preference and the shadcn-generated-files exception.
+
+**Prompt:** "refactor cases like this to favor higher order functions" (a manual `for` loop building a `Map<string, UserSummary[]>` grouping in `user-picker.tsx`)
+
+- Replaced the loop with `Array.prototype.reduce`; verified typecheck stays clean and no other manual `for` loops remain in `client`/`api` `src`.
+- Added "prefer higher-order array methods over manual `for` loops" to `CLAUDE.md`'s Code style section.
