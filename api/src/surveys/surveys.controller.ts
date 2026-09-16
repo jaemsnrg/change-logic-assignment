@@ -47,4 +47,13 @@ export class SurveysController {
       answers: body.answers,
     });
   }
+
+  @Get(':id/summary')
+  @UseGuards(RolesGuard)
+  @Roles('Manager')
+  async getSummary(@Req() request: Request, @Param('id') surveyId: string) {
+    const user = request.user as RequestUser;
+
+    return this.surveysService.getSurveySummary(request.tx as Prisma.TransactionClient, user.orgId, surveyId);
+  }
 }

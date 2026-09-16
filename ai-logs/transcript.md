@@ -204,3 +204,32 @@ Log of conversations with AI coding agents (e.g. Claude Code) used to produce wo
 - `app/components/user-picker.tsx`: scaled the org name `h2` from `text-sm font-medium text-muted-foreground` to `text-2xl font-semibold text-foreground` so it reads as the primary heading for each org group (previously the same size as the new "MANAGERS"/"MEMBERS" sub-headings).
 - `npm run typecheck` clean; verified visually via Chrome DevTools MCP screenshot.
 - Updated spec 002's implementation notes with this change.
+
+## Session — 2026-09-16 (Claude Code, Sonnet 5)
+
+**Prompt:** "draft spec 003-weekly-survey-summary. As a manger, the user should be able to view a weekly summary per survey. Use the overall spec and assignment doc"
+
+- Read `specs/overall.md`, `templates/spec_template.md`, `docs/assignment.pdf`, `specs/002-submit-survey-response.md`, `docs/adr/adr-0001-multi-tenancy-rls.md`, and the existing `api/src/surveys/*` code (`surveys.service.ts`, `surveys.controller.ts`, `week.ts`) and Prisma schema to ground the draft in what's actually implemented so far.
+- Drafted `specs/003-weekly-survey-summary.md`: `GET /surveys/:id/summary`, Manager-only, current calendar week, completion count/rate (Member denominator) + per-question rollups (rating average+count, yesNo counts), computed in app code per the 001/002 precedent.
+- Updated `specs/overall.md`'s API-surface note to point to the new spec.
+
+**Prompt:** "/mattpocock-skills:grill-with-docs grill me over the spec to resolve any uncertainty"
+
+- Ran a `/grilling` session (with `/domain-modeling` loaded) walking through open judgment calls one at a time, each with a recommendation, waiting for a decision before moving on:
+  1. Whether inactive surveys should be summarizable at all — initially agreed "yes, any org survey," then **reversed** after a follow-up question exposed a contradiction: the summary is always "this calendar week," and `submitResponse` requires `isActive`, so an inactive survey's summary would deterministically show all-zero data rather than "final numbers." Landed on: **active-survey-only, `409` for inactive**.
+  2. Rating average on zero answers: `null` + `count: 0`, not `0` — with an explicit note that the FE must render `null` as "no data yet," not fall through to a numeric default.
+  3. Rating average precision: rounded to 2 decimal places server-side.
+  4. Question rollups include `text`/`order` (no separate survey-fetch endpoint exists yet to get labels otherwise).
+  5. yesNo rollup keys: kept `{ true, false }` (mirrors the stored boolean 1:1) over a `{ yes, no }` alternative.
+  6. Completion rate on zero Members: `null`, not `0` — same "not applicable" pattern as the rating average.
+- Rewrote `specs/003-weekly-survey-summary.md`'s Goal/In-scope/Key-decisions/API-surface/Implementation-notes sections to reflect all six decisions, including the rationale for the reversed scope call. No `CONTEXT.md` changes — these were contract/implementation decisions, not domain-vocabulary shifts.
+
+**Prompt:** "write the tests for my approval before implmenting the backend"
+
+- Read the existing test conventions (`surveys.service.spec.ts`, `surveys.controller.spec.ts`, `surveys-responses.e2e-spec.ts`, `test/fixtures.ts`, `auth/roles.guard.ts`/`roles.decorator.ts`) to match style and reuse patterns rather than inventing new ones.
+- Added `addMember()` and `seedOrgWithActiveSurveyNoMembers()` to `api/test/fixtures.ts` — needed to construct multi-Member (completion-rate) and zero-Member (`rate: null`) scenarios not covered by the existing single-Member fixture.
+- Added a `getSurveySummary` describe block to `surveys.service.spec.ts`: 404 (wrong org/unknown id), 409 (inactive survey), completion count/total/rate incl. 2-decimal rounding and `null` on zero Members, rating rollup (rounding, and `null`/`0` when unanswered), yesNo rollup (`{true, false}` counts and zero-default), `text`/`order` inclusion and ordering, and the exact `user.count`/`response.count`/`answer.findMany` query shapes.
+- Added a `GET /surveys/:id/summary` describe block to `surveys.controller.spec.ts`: delegates to the service with `tx`/`orgId`/`surveyId`.
+- Wrote `api/test/surveys-summary.e2e-spec.ts`: 401/403/404×2/409, zero-response summary, zero-Member org, a realistic 3-Member/2-response scenario asserting exact completion and rollup numbers, and cross-org isolation.
+- Ran the new/changed unit test files (`npx vitest run` on both spec files) to confirm the new tests fail with `TypeError: ... is not a function` (missing implementation) rather than a setup/typo error, and that all pre-existing tests still pass (16/29 passing, 13 new failures, all expected) — proper TDD red state before implementation.
+- Flagged one unreviewed judgment call for the user before proceeding to implementation: `completion.rate` was rounded to 2 decimals for consistency with the rating-average rounding decision, though the spec's key-decisions table only explicitly called out rounding for the rating average — not yet confirmed.

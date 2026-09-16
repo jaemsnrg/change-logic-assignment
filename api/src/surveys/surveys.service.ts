@@ -93,4 +93,70 @@ export class SurveysService {
       throw error;
     }
   }
+
+  async getSurveySummary(tx: Prisma.TransactionClient, orgId: string, surveyId: string) {
+    const survey = await tx.survey.findFirst({
+      where: { id: surveyId, orgId },
+      include: { questions: { orderBy: { order: 'asc' } } },
+    });
+
+    if (!survey) {
+      throw new NotFoundException('Survey not found');
+    }
+
+    if (!survey.isActive) {
+      throw new ConflictException('Survey is not currently active');
+    }
+
+    const weekStart = getWeekStart();
+
+    const [total, count, answers] = await Promise.all([
+      tx.user.count({ where: { orgId, role: 'Member' } }),
+      tx.response.count({ where: { surveyId, weekStart } }),
+      tx.answer.findMany({
+        where: { response: { surveyId, weekStart } },
+        select: { questionId: true, value: true },
+      }),
+    ]);
+
+    const answersByQuestion = new Map<string, unknown[]>();
+    for (const answer of answers) {
+      const values = answersByQuestion.get(answer.questionId) ?? [];
+      values.push(answer.value);
+      answersByQuestion.set(answer.questionId, values);
+    }
+
+    const questions = [...survey.questions].sort((a, b) => a.order - b.order).map((question) => {
+      const values = answersByQuestion.get(question.id) ?? [];
+      const base = { questionId: question.id, type: question.type, text: question.text, order: question.order };
+
+      if (question.type === 'rating') {
+        const ratingValues = values as number[];
+        const average = ratingValues.length
+          ? Math.round((ratingValues.reduce((sum, value) => sum + value, 0) / ratingValues.length) * 100) / 100
+          : null;
+        return { ...base, rating: { average, count: ratingValues.length } };
+      }
+
+      const yesNoValues = values as boolean[];
+      return {
+        ...base,
+        yesNo: {
+          true: yesNoValues.filter((value) => value === true).length,
+          false: yesNoValues.filter((value) => value === false).length,
+        },
+      };
+    });
+
+    return {
+      surveyId: survey.id,
+      weekStart,
+      completion: {
+        count,
+        total,
+        rate: total === 0 ? null : Math.round((count / total) * 100) / 100,
+      },
+      questions,
+    };
+  }
 }
